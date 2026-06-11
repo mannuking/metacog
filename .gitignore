@@ -4,14 +4,24 @@ __pycache__/
 *.pyo
 *.egg-info/
 .env
-results/*.jsonl
-results/*.json
-results/*.csv
-results/*.parquet
-logs/*.log
-logs/*.jsonl
-.DS_Store
+
+# Local research-paper artifacts (kept on disk, not on GitHub)
+paper/
+results/**/*.json
+results/**/*.csv
+results/**/*.log
+results/**/*.txt
+results/**/*.md
+results/**/*.jsonl
+results/**/*.parquet
+
+# Logs and local-only files
+logs/
 *.swp
+.DS_Store
 .idea/
 .vscode/
 .ipynb_checkpoints/
+
+# Plots (regenerate with scripts/plot_*.py — not part of the developer pipeline)
+figures/
