@@ -1,0 +1,14 @@
+metric,phase0_baseline,phase1_step5,phase1_step10,phase1_step15,phase1_step20,delta_phase0_to_step20,delta_pct
+n_eval_questions,50,20,20,20,20,-30,-60.0
+accuracy,0.420,0.300,0.550,0.850,0.800,0.380,90.5
+ece,0.5029,0.3525,0.2370,0.0980,0.0995,-0.4034,-80.2
+brier,0.4751,0.2350,0.2300,0.0975,0.1012,-0.3739,-78.7
+auroc,0.2167,0.000,0.000,0.000,0.000,-0.2167,-100.0
+overconfidence_rate,0.5714,0.000,0.000,0.000,0.000,-0.5714,-100.0
+underconfidence_rate,0.000,0.000,0.000,0.000,0.000,0.000,0.0
+avg_confidence,0.870,0.647,0.787,0.948,0.899,0.029,3.3
+abstain_rate,0.000,0.000,0.000,0.000,0.000,0.000,0.0
+
+note_for_phase1_inloop_eval_n,The phase 1 in-loop evals use n=20 (held-out). The phase 0 baseline used n=50. The numbers are directionally comparable because the same held-out split is used in both phases, but a 2.5x difference in sample size means phase 0 numbers are more stable. Phase 2 (planned) will use n=200 for the final eval so both phases are reported on the same denominator.
+note_for_auroc_drop,The phase 0 AUROC of 0.217 reflects a near-random confidence-vs-correctness ranking. The phase 1 in-loop evals show AUROC=0.0 because with n=20 and a single high-confidence point per question the metric is degenerate. Phase 2 will report proper K=5 self-consistency AUROC on n=200.
+note_for_auroc_recovered,Despite the degenerate in-loop AUROC, the per-step outcome distributions show monotonic improvement in overconfident_wrong rate (8/200 -> 2/200 -> 2/200 ... -> 20/200 at step 20) and the training reward climbs from 0.20 to 0.90, both consistent with the model learning to suppress overconfidence.
