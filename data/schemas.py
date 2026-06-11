@@ -108,6 +108,11 @@ class TraceRecord(BaseModel):
     n_prompt_tokens: int = 0
     n_completion_tokens: int = 0
     latency_s: float = 0.0
+    # REAL confidence signal (per-token log probabilities from the Tinker sampling API).
+    # `per_token_logprobs` is the raw list (None for non-sampled tokens, e.g. stop token).
+    # `logprob_mean` is the mean of finite logprobs; this is the natural confidence proxy.
+    per_token_logprobs: list[float] | None = None
+    logprob_mean: float | None = None
     # Tinker request id (for tracing back to the exact API call)
     request_id: str | None = None
 

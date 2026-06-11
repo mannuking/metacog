@@ -1,0 +1,24 @@
+=== Metacog baseline report ===
+model: Qwen/Qwen3.6-35B-A3B
+k=1, n=50 questions, 50 API calls in 360.8s
+
+OVERALL:
+  N:                       50
+  accuracy:                0.420
+  ECE (10-bin):            0.503  (lower = better calibrated)
+  Brier score:             0.475  (lower = better)
+  AUROC:                   0.217  (1.0 = perfect separation)
+  overconfident rate (>0.8): 0.571  (lower = better)
+  underconfident rate (<0.2): 0.000  (lower = better)
+
+  Reliability diagram (10 bins):
+  bin          n    mean_conf   actual_acc   gap
+  [0.6,0.7)      1    0.698      0.000      +0.698
+  [0.8,0.9)     15    0.870      0.067      +0.803
+  [0.9,1.0)     34    0.953      0.588      +0.365
+
+PER SOURCE:
+
+  [gsm8k] n=25 acc=0.640 ECE=0.304 Brier=0.305 AUROC=0.1736111111111111
+
+  [mmlu_pro] n=25 acc=0.200 ECE=0.702 Brier=0.645 AUROC=0.26

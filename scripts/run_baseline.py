@@ -33,6 +33,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import os
 import re
 import statistics
 import sys
@@ -48,7 +50,7 @@ from data.load_datasets import load_gsm8k, load_mmlu_pro
 from data.schemas import QuestionRecord, TraceRecord
 from eval.metrics import calibration_report, format_report
 from eval.normalize import extract_final_answer, is_correct, normalize_answer
-from tinker.client import MetacogConfig, TinkerClient
+from tink.client import MetacogConfig, TinkerClient
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RESULTS_DIR = PROJECT_ROOT / "results"
@@ -102,6 +104,27 @@ def heuristic_confidence(thinking_text: str) -> float:
     n_markers = len(_CONFIDENCE_MARKERS.findall(thinking_text))
     score = 0.7 - 0.05 * n_hedges + 0.03 * n_markers
     return max(0.05, min(0.95, score))
+
+
+def logprob_to_confidence(lp_mean: float | None) -> float | None:
+    """Convert mean per-token log-probability to a [0, 1] confidence score.
+
+    The Tinker API returns per-token logprobs (one per generated token).
+    `lp_mean` is the mean of those (one float, or None if unavailable).
+
+    Logprobs are <= 0. Higher (closer to 0) = more confident.
+    We map with a calibrated softmax-style transform:
+        conf = exp(lp_mean / scale)   where scale is a temperature.
+    Empirically, well-trained instruction models have lp_mean in [-0.5, 0]
+    for high-confidence outputs and [-3, -1] for low-confidence ones.
+    A scale of 1.0 gives a usable spread across that range.
+    """
+    if lp_mean is None:
+        return None
+    # Clip to a reasonable range so one very long low-probability streak
+    # doesn't drag the score to 0. -10 nats is ~ exp(-10) ≈ 4.5e-5.
+    clipped = max(min(lp_mean, 0.0), -10.0)
+    return float(round(math.exp(clipped), 4))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -172,9 +195,17 @@ def main() -> None:
     p.add_argument("--n-gsm8k", type=int, default=20, help="Number of GSM8K questions")
     p.add_argument("--n-mmlu-pro", type=int, default=20, help="Number of MMLU-Pro questions")
     p.add_argument("--max-tokens", type=int, default=1024, help="Max new tokens per sample")
+    p.add_argument("--model", type=str, default="", help="Tinker base model id (overrides TINKER_BASE_MODEL env / client default)")
+    p.add_argument("--temperature", type=float, default=-1.0, help="Sampling temperature (-1 = use default 0.0 for k=1, 0.7 for k>1)")
+    p.add_argument("--use-logprob-confidence", action="store_true", default=True, help="Use real per-token logprobs as confidence signal (default: True). Falls back to heuristic only when no logprobs are available.")
     p.add_argument("--dry-run", action="store_true", help="Skip API calls, just verify the pipeline")
     p.add_argument("--out-prefix", type=str, default="baseline", help="Filename prefix for outputs")
     args = p.parse_args()
+
+    # Apply model override BEFORE constructing the client so it picks up the new base model.
+    if args.model:
+        # Touch the env so the lazy MetacogConfig picks it up
+        os.environ["TINKER_BASE_MODEL"] = args.model
 
     log_path = LOGS_DIR / f"{args.out_prefix}_{time.strftime('%Y%m%d_%H%M%S')}.log"
     log_lines: list[str] = []
@@ -204,14 +235,14 @@ def main() -> None:
 
     # ── Initialize Tinker client (skip on dry-run) ─────────────────────────
     client = TinkerClient()
-    if not client.is_configured and not args.dry_run:
+    if not args.dry_run and not os.environ.get("TINKER_API_KEY", "").strip():
         log("ERROR: TINKER_API_KEY not set in .env")
         log("  Add it to E:/Projects/Metacog/.env and re-run")
         return
     if args.dry_run:
         log("  DRY-RUN mode: no API calls will be made")
     else:
-        log(f"  Tinker base model: {client.config.base_model}")
+        log(f"  Tinker base model: {client.config.default_base_model}")
 
     # ── Run samples ────────────────────────────────────────────────────────
     traces: list[TraceRecord] = []
@@ -222,33 +253,56 @@ def main() -> None:
 
     for qi, q in enumerate(questions, 1):
         prompt = build_prompt(q)
+        # Pick temperature: explicit override > heuristic (0.0 for k=1, 0.7 for self-consistency)
+        if args.temperature >= 0:
+            temp = args.temperature
+        else:
+            temp = 0.0 if args.k == 1 else 0.7
+
+        # === BATCH: get all K samples in one API call (more efficient) ===
+        per_token_logprobs_list: list[list[float] | None] = [None] * args.k
+        logprob_mean_list: list[float | None] = [None] * args.k
+        if args.dry_run:
+            raws = [_synthetic_response(q, si, args.k) for si in range(args.k)]
+            latencies = [0.0] * args.k
+            n_tokens = [0] * args.k
+        else:
+            raws: list[str] = []
+            latencies: list[float] = []
+            n_tokens: list[int] = []
+            try:
+                # Call with num_samples=k — Tinker returns K sequences in one request.
+                results = client.sample(
+                    prompt,
+                    max_tokens=args.max_tokens,
+                    temperature=temp,
+                    num_samples=args.k,
+                )
+                if not results or len(results) < args.k:
+                    raise RuntimeError(f"tinker.sample returned {len(results) if results else 0} results, expected {args.k}")
+                for si, res in enumerate(results):
+                    raws.append(res.text)
+                    latencies.append(res.latency_s)
+                    n_tokens.append(res.n_tokens)
+                    per_token_logprobs_list[si] = res.logprobs
+                    logprob_mean_list[si] = res.logprob_mean
+                n_api_calls += 1
+            except Exception as e:
+                log(f"  ERROR on {q.id} (k={args.k}): {e}")
+                n_errors += 1
+                continue
+
         for sample_idx in range(args.k):
-            if args.dry_run:
-                # Inject a synthetic response so the pipeline can be tested
-                # end-to-end without any API cost.
-                raw = _synthetic_response(q, sample_idx, args.k)
-                latency = 0.0
-                n_completion_tokens = 0
-            else:
-                try:
-                    res = client.sample(
-                        prompt,
-                        max_tokens=args.max_tokens,
-                        temperature=0.0 if args.k == 1 else 0.7,
-                    )
-                    raw = res.text
-                    latency = res.latency_s
-                    n_completion_tokens = res.n_tokens
-                    n_api_calls += 1
-                except Exception as e:
-                    log(f"  ERROR on {q.id} sample {sample_idx}: {e}")
-                    n_errors += 1
-                    continue
+            raw = raws[sample_idx]
+            latency = latencies[sample_idx]
+            n_completion_tokens = n_tokens[sample_idx]
+            per_token_logprobs = per_token_logprobs_list[sample_idx]
+            logprob_mean = logprob_mean_list[sample_idx]
 
             trace = TraceRecord(
                 id=f"{q.id}-s{sample_idx}",
                 question_id=q.id,
-                model=client.config.base_model if not args.dry_run else "DRY-RUN",
+                model=client.config.default_base_model if not args.dry_run else "DRY-RUN",
                 prompt=prompt,
                 raw_output=raw,
                 thinking_steps=[],
@@ -256,6 +310,8 @@ def main() -> None:
                 parse_ok=True,
                 n_completion_tokens=n_completion_tokens,
                 latency_s=latency,
+                per_token_logprobs=per_token_logprobs,
+                logprob_mean=logprob_mean,
             )
             traces.append(trace)
             per_q_samples[q.id].append(trace)
@@ -299,9 +355,15 @@ def main() -> None:
         correct_majority = is_correct(majority, q.gold_answer, q.source)
 
         if args.k == 1:
-            # Use heuristic confidence from the single sample
-            _, thinking, conf = parse_trace(q_traces[0].raw_output, q_traces[0].model, q)
-            per_q_conf[q.id] = conf
+            # Use REAL logprob-based confidence if we have it, else fall back
+            # to the trace-heuristic.
+            tr0 = q_traces[0]
+            lp_conf = logprob_to_confidence(tr0.logprob_mean) if args.use_logprob_confidence else None
+            if lp_conf is not None:
+                per_q_conf[q.id] = lp_conf
+            else:
+                _, thinking, conf = parse_trace(tr0.raw_output, tr0.model, q)
+                per_q_conf[q.id] = conf
         else:
             # Self-consistency: fraction matching the majority
             matching = sum(1 for a in parsed_answers if a == majority)
@@ -354,7 +416,7 @@ def main() -> None:
             "n_mmlu_pro": args.n_mmlu_pro,
             "max_tokens": args.max_tokens,
             "dry_run": args.dry_run,
-            "model": client.config.base_model if not args.dry_run else "DRY-RUN",
+            "model": client.config.default_base_model if not args.dry_run else "DRY-RUN",
         },
         "elapsed_s": elapsed,
         "n_api_calls": n_api_calls,
@@ -383,7 +445,7 @@ def main() -> None:
     report_path = RESULTS_DIR / f"{args.out_prefix}_reliability.txt"
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(f"=== Metacog baseline report ===\n")
-        f.write(f"model: {client.config.base_model if not args.dry_run else 'DRY-RUN'}\n")
+        f.write(f"model: {client.config.default_base_model if not args.dry_run else 'DRY-RUN'}\n")
         f.write(f"k={args.k}, n={len(questions)} questions, {n_api_calls} API calls in {elapsed:.1f}s\n\n")
         f.write("OVERALL:\n")
         f.write(format_report(overall))
