@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Metacog · Phase 1 Training Live</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="dot" id="connDot"></span>
+    <h1>Metacog · Phase 1 RL</h1>
+  </div>
+  <div class="meta" id="headerMeta">connecting…</div>
+</header>
+
+<main>
+  <section class="grid top">
+    <div class="card big">
+      <div class="kpi-label">Step</div>
+      <div class="kpi"><span id="kpiStep">—</span><span class="of">/ <span id="kpiTotal">20</span></span></div>
+      <div class="bar"><div class="bar-fill" id="stepBar" style="width:0%"></div></div>
+    </div>
+    <div class="card">
+      <div class="kpi-label">Latest reward (mean)</div>
+      <div class="kpi" id="kpiReward">—</div>
+      <div class="sub" id="kpiRewardSub"></div>
+    </div>
+    <div class="card">
+      <div class="kpi-label">Accuracy (last 200 rollouts)</div>
+      <div class="kpi"><span id="kpiAcc">—</span><span class="pct">%</span></div>
+      <div class="sub" id="kpiAccSub"></div>
+    </div>
+    <div class="card">
+      <div class="kpi-label">Overconfident wrong (last step)</div>
+      <div class="kpi"><span id="kpiOver">—</span><span class="pct">%</span></div>
+      <div class="sub">target: ↓ to 0%</div>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card wide">
+      <div class="card-title">Reward per step</div>
+      <svg id="rewardChart" viewBox="0 0 600 200" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card">
+      <div class="card-title">Outcome mix (latest step)</div>
+      <svg id="outcomesChart" viewBox="0 0 200 200"></svg>
+      <div class="legend">
+        <span class="lg lg-correct">● correct</span>
+        <span class="lg lg-humble">● humble_wrong</span>
+        <span class="lg lg-over">● overconfident_wrong</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <div class="card-title">Baseline (initial eval)</div>
+      <table class="kv">
+        <tr><td>accuracy</td><td id="initAcc">—</td></tr>
+        <tr><td>ECE</td><td id="initEce">—</td></tr>
+        <tr><td>avg confidence</td><td id="initConf">—</td></tr>
+        <tr><td>abstention</td><td id="initAbst">—</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-title">Run config</div>
+      <table class="kv" id="cfgTable">
+        <tr><td colspan="2" class="muted">loading…</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-title">Checkpoints</div>
+      <ul class="ckpts" id="ckptsList"><li class="muted">none yet</li></ul>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-title">Live log (last 25 lines)</div>
+    <pre id="logTail" class="log">waiting for log…</pre>
+  </section>
+</main>
+
+<footer>
+  <span id="footTime">—</span> ·
+  <span>log: <code id="footLog">—</code></span>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
