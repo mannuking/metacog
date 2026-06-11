@@ -1,0 +1,20 @@
+[17:17:12] === Metacog Phase 1 RL ===
+[17:17:12]   base_model: Qwen/Qwen3.6-35B-A3B
+[17:17:12]   lora_rank: 32, group_size: 4, lr: 1e-05
+[17:17:12]   n_steps: 20, save_every: 5, eval_every: 5
+[17:17:12]   loss_fn: importance_sampling, temperature: 1.0
+[17:17:12]   out_dir: results\phase1
+[17:17:12] Creating LoRA training client...
+[17:17:21]   tokenizer: TokenizersBackend, vocab=248044
+[17:17:28]   loaded 50 training questions
+[17:17:32]   loaded 20 eval questions
+[17:17:32] Initial eval (baseline of starting policy)...
+[17:19:46]   INIT  acc=0.250  ECE=0.3765  avg_conf=0.624  abst=0.000
+[17:19:46] 
+--- step 1/20 ---
+[17:27:07]   rollouts: 200, reward mean=0.202, std=0.550
+[17:27:07]   outcomes: {'humble_wrong': 153, 'overconfident_wrong': 8, 'correct': 39}
+[17:27:08]   training data: 200 datums
+[17:27:35]   loss=0.0000, step_time=468.5s
+[17:27:35] 
+--- step 2/20 ---
