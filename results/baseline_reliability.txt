@@ -1,0 +1,22 @@
+=== Metacog baseline report ===
+model: DRY-RUN
+k=1, n=60 questions, 0 API calls in 0.0s
+
+OVERALL:
+  N:                       60
+  accuracy:                0.517
+  ECE (10-bin):            0.017  (lower = better calibrated)
+  Brier score:             0.250  (lower = better)
+  AUROC:                   0.500  (1.0 = perfect separation)
+  overconfident rate (>0.8): 0.000  (lower = better)
+  underconfident rate (<0.2): 0.000  (lower = better)
+
+  Reliability diagram (10 bins):
+  bin          n    mean_conf   actual_acc   gap
+  [0.5,0.6)     60    0.500      0.517      -0.017
+
+PER SOURCE:
+
+  [gsm8k] n=30 acc=0.500 ECE=0.000 Brier=0.250 AUROC=0.5
+
+  [mmlu_pro] n=30 acc=0.533 ECE=0.033 Brier=0.250 AUROC=0.5

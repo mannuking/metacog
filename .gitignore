@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.env
+results/*.jsonl
+results/*.json
+results/*.csv
+results/*.parquet
+logs/*.log
+logs/*.jsonl
+.DS_Store
+*.swp
+.idea/
+.vscode/
+.ipynb_checkpoints/
